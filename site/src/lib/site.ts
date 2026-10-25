@@ -12,12 +12,6 @@ export const SITE = {
     + "Markdown notes in your own Git repo, no server, no database.",
 } as const;
 
-/** Self-hosted Plausible on p.fliege.dev, cookieless. The privacy policy on schmidbauer.dev covers it. */
-export const PLAUSIBLE = {
-  src: "https://p.fliege.dev/js/pa-GzUosA8gkfhIw50L14ipf.js",
-  init: "/plausible-init.js",
-} as const;
-
 /** The share image, made by scripts/og-image.ts. */
 export const OG_IMAGE = {
   url: SITE.url + "/og.png",

@@ -20,6 +20,10 @@
 				} catch (e) {}
 			})();
 		</script>
+		<!-- Plausible (p.fliege.dev, cookieless). Static here, not in a component: Svelte would hydrate the tags, and
+		     a content blocker that removes them breaks hydration. Plausible ignores localhost, so dev sends nothing. -->
+		<script src="/plausible-init.js"></script>
+		<script async src="https://p.fliege.dev/js/pa-GzUosA8gkfhIw50L14ipf.js"></script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import '../app.css';
-	import { dev } from '$app/env';
 	import { page } from '$app/state';
 	import BookOpen from '@lucide/svelte/icons/book-open';
 	import BrandMark from '#lib/components/BrandMark.svelte';
@@ -9,20 +8,13 @@
 	import CodeCopy from '#lib/components/CodeCopy.svelte';
 	import GitHubMark from '#lib/components/GitHubMark.svelte';
 	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
-	import { currentFor, NAV, PLAUSIBLE, SITE } from '#lib/site.js';
+	import { currentFor, NAV, SITE } from '#lib/site.js';
 
 	let { children } = $props();
 
 	const ICONS = { Docs: BookOpen, Commands: SquareTerminal, Changelog: History } as const;
 	const nav = NAV.map((item) => ({ ...item, icon: ICONS[item.label as keyof typeof ICONS] }));
 </script>
-
-<svelte:head>
-	{#if !dev}
-		<script src={PLAUSIBLE.init}></script>
-		<script async src={PLAUSIBLE.src}></script>
-	{/if}
-</svelte:head>
 
 <a
 	href="#main"
