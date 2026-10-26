@@ -4,6 +4,7 @@ import * as fs from "node:fs";
 
 import type { Config } from "./config.ts";
 import { Rejected } from "./errors.ts";
+import { insideWithoutSymlinks } from "./files.ts";
 import { run } from "./proc.ts";
 import { str, strip } from "./py.ts";
 import { isObject, type Json, type JsonObject, loads } from "./pyjson.ts";
@@ -191,13 +192,23 @@ export function addPermissions(settings: Settings, path: string): void {
   }
 }
 
+/**
+ * The settings file `rel` inside the brain. A brain may come from someone else: a symlink on the way would
+ * make install write outside it, so any symlink between the root and the file is rejected.
+ */
+export function settingsPath(config: Config, ...rel: string[]): string {
+  const path = join(config.root, ...rel);
+  if (!insideWithoutSymlinks(config.root, path)) throw new Rejected("install_symlink", { path: asPosix(rel.join("/")) });
+  return path;
+}
+
 export function writeJson(path: string, data: Settings): void {
   fs.mkdirSync(parent(path), { recursive: true });
   writeText(path, JSON.stringify(data, null, 2) + "\n");
 }
 
 export function installClaude(config: Config, replace: readonly string[] = []): [string, number] {
-  const path = join(config.root, ".claude", "settings.json");
+  const path = settingsPath(config, ".claude", "settings.json");
   const settings = loadJson(path);
   const removed = removeHooks(settings, replace);
   setdefault(settings, "$schema", "https://json.schemastore.org/claude-code-settings.json");
@@ -210,7 +221,7 @@ export function installClaude(config: Config, replace: readonly string[] = []): 
 }
 
 export function installCodex(config: Config, replace: readonly string[] = []): [string, number] {
-  const path = join(config.root, ".codex", "hooks.json");
+  const path = settingsPath(config, ".codex", "hooks.json");
   const settings = loadJson(path);
   const removed = removeHooks(settings, replace);
   const command: JsonObject = {
@@ -230,9 +241,9 @@ export function installCodex(config: Config, replace: readonly string[] = []): [
  */
 export function install(config: Config, replace: readonly string[] = []): [string[], number] {
   gitHookPath(config);
-  const claudeSettings = join(config.root, ".claude", "settings.json");
+  const claudeSettings = settingsPath(config, ".claude", "settings.json");
   permissionsOf(loadJson(claudeSettings), claudeSettings);
-  if (config.extras.codexSync) loadJson(join(config.root, ".codex", "hooks.json"));
+  if (config.extras.codexSync) loadJson(settingsPath(config, ".codex", "hooks.json"));
   const [claude, removedClaude] = installClaude(config, replace);
   let removed = removedClaude;
   const written = [installGitHook(config), claude];

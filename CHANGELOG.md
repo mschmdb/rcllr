@@ -5,6 +5,20 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+Found in a cross-provider review (Codex) of the access, write, sync and install code.
+
+- `import-memory` writes the scope into every imported note. Before, a note named its scope only when it differed
+  from the source's, and inherited the rest from the topic README, which is written once. A source moved from `work`
+  to `private` kept its notes readable with `--scope work`. Notes whose scope would change now stay as they are and are
+  listed, because a scope change needs a review: delete them to import them again in the new scope.
+- `install` refuses to write `.claude/settings.json` or `.codex/hooks.json` through a symlink. A brain from someone
+  else could otherwise make it write a file outside the brain.
+- A link to a non-Markdown file through a symlink is unavailable, like a missing file. Before, `check` accepted it when
+  the target outside the brain existed, which told whether that file exists.
+- The note commit no longer takes along the old path of a rename someone staged outside the notes.
+
 ## [0.5.5] - 2026-10-24
 
 ### Security

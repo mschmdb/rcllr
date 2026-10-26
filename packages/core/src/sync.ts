@@ -148,10 +148,12 @@ function pushes(config: Config): boolean {
  * foreign staged changes are parked as a patch and restored after the commit.
  */
 function commitNotesOnly(config: Config, message: string): void {
-  const staged = new Set(git(config, ["diff", "--cached", "--name-only", "-z"]).stdout.split("\0"));
-  const notes = new Set(git(config, ["diff", "--cached", "--name-only", "-z", ...notePathspec(config)]).stdout.split("\0"));
+  // --no-renames: a rename lists only its new path, so the deletion of the old one would slip into the commit.
+  const staged = new Set(git(config, ["diff", "--cached", "--no-renames", "--name-only", "-z"]).stdout.split("\0"));
+  const notes = new Set(git(config, ["diff", "--cached", "--no-renames", "--name-only", "-z", ...notePathspec(config)])
+    .stdout.split("\0"));
   const foreign = sorted([...staged].filter((path) => path && !notes.has(path)));
-  const parked = foreign.length > 0 ? git(config, ["diff", "--cached", "--binary", "--", ...foreign]).stdout : "";
+  const parked = foreign.length > 0 ? git(config, ["diff", "--cached", "--no-renames", "--binary", "--", ...foreign]).stdout : "";
   if (foreign.length > 0) git(config, ["reset", "-q", "--", ...foreign]);
   try {
     git(config, ["commit", "-m", message]);

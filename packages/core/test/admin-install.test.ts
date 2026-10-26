@@ -256,3 +256,23 @@ test("init with a remote in an existing Git repo adds the Git remote", () => {
   // Read the raw config: a url.insteadOf rewrite in the environment must not change the answer.
   assert.equal(runGit(target, ["config", "--get", "remote.origin.url"]).trim(), "git@example.org:me/brain.git");
 });
+
+test("install never writes through a symlink planted in the brain", () => {
+  for (const plant of ["file", "folder"] as const) {
+    const target = repo();
+    const outside = tempDir();
+    const victim = path.join(outside, "settings.json");
+    fs.writeFileSync(victim, "{}\n");
+    if (plant === "file") {
+      fs.mkdirSync(path.join(target.root, ".claude"));
+      fs.symlinkSync(victim, path.join(target.root, ".claude", "settings.json"));
+    } else {
+      fs.symlinkSync(outside, path.join(target.root, ".claude"));
+    }
+    const result = invoke(target, ["install"]);
+    assert.equal(result.code, 2, plant);
+    assert.ok(result.err.includes("symlink"), result.err);
+    assert.equal(fs.readFileSync(victim, "utf-8"), "{}\n", plant);
+    assert.ok(!fs.existsSync(hookPath(target)), "nothing is written before the check");
+  }
+});
