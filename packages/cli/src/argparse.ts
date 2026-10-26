@@ -38,6 +38,8 @@ interface Option {
   readonly type?: "int";
   readonly choices?: readonly string[];
   readonly required?: boolean;
+  /** Said after "missing <option>", so the error tells what to pass. */
+  readonly missingHint?: string;
   readonly default?: unknown;
   /** Leave the destination unset when the option is absent. */
   readonly suppress?: boolean;
@@ -60,6 +62,7 @@ export interface OptionSpec {
   type?: "int";
   choices?: readonly string[];
   required?: boolean;
+  missingHint?: string;
   default?: unknown;
   suppress?: boolean;
 }
@@ -241,7 +244,9 @@ export class Parser {
     const extras = this.assignPositionals(loose, namespace);
     const missing = this.options.filter((option) => option.required && !seen.has(option.dest));
     if (missing.length > 0) {
-      throw new UsageError(this, usageText("usage_missing", { names: missing.map(label).join(", ") }));
+      const hints = missing.flatMap((option) => (option.missingHint ? [option.missingHint] : []));
+      throw new UsageError(this, usageText("usage_missing", { names: missing.map(label).join(", ") })
+        + (hints.length > 0 ? ". " + hints.join(" ") : ""));
     }
     return [extras, this];
   }

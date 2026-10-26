@@ -117,6 +117,25 @@ describe("sync", () => {
     assert.equal(s.git(["rev-parse", "HEAD"]), s.git(["rev-parse", "refs/heads/main"], s.remote));
   });
 
+  test("a write checks against the rcllr.toml it just fetched, not the one it started with", () => {
+    const s = synced();
+    const stale = new Access(s.brain.config);
+    s.remoteEdit("rcllr.toml", s.brain.read("rcllr.toml") + "[sensitive]\nalways = ['notes/secret.md']\n");
+    const packet = { changes: [{ path: "notes/secret.md", expected: null, content: document({ body: "New." }) }] };
+    assert.throws(() => ingest(stale, packet), RcllrError);
+    assert.ok(!fs.existsSync(path.join(s.brain.root, "notes", "secret.md")));
+  });
+
+  test("a push URL other than the configured remote stops the sync", () => {
+    const s = synced();
+    const elsewhere = path.join(tempDir(), "elsewhere.git");
+    s.git(["init", "-q", "--bare", elsewhere]);
+    s.git(["config", "remote.origin.pushurl", elsewhere]);
+    s.brain.write("notes/first.md", "updated\n");
+    assert.equal(caught(() => syncRepository(s.brain.config)).key, "git_remote");
+    assert.equal(s.git(["rev-list", "--all", "--count"], elsewhere), "0");
+  });
+
   test("sync leaves excluded paths uncommitted", () => {
     const s = synced();
     excludeTools(s);
@@ -163,6 +182,21 @@ describe("sync", () => {
     assert.equal(s.brain.read("notes/remote.md"), "remote edit\n");
     assert.equal(s.brain.read("scripts/tool.py"), "v2 draft\n");
     assert.equal(s.git(["status", "--porcelain"]), "M scripts/tool.py");
+  });
+
+  test("a rebase keeps what someone staged outside the notes staged", () => {
+    const s = synced();
+    excludeTools(s);
+    s.brain.write("scripts/tool.py", "v1\n");
+    s.brain.commit("Add tool");
+    s.git(["push", "-q"]);
+    s.remoteEdit("notes/remote.md", "remote edit\n");
+    s.brain.write("scripts/tool.py", "v2 staged\n");
+    s.git(["add", "scripts/tool.py"]);
+    s.brain.write("notes/first.md", "local edit\n");
+    syncRepository(s.brain.config);
+    assert.equal(s.brain.read("notes/remote.md"), "remote edit\n");
+    assert.equal(s.git(["diff", "--cached", "--name-only"]), "scripts/tool.py");
   });
 
   test("prepare ignores excluded changes but not note changes", () => {

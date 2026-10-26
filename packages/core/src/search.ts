@@ -33,6 +33,8 @@ export interface DateRange {
 
 /** A read result. Key order is the JSON order: hits, match, more, truncated, then the optional keys. */
 export interface Packet {
+  /** Only for `read` of one note: its revision, the same as `hits[0].revision`. */
+  revision?: string;
   hits: Hit[];
   match: string;
   more: boolean;
