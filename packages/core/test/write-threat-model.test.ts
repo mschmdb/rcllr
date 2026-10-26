@@ -390,6 +390,19 @@ describe("extras and links.allow_outside", () => {
     assert.equal(linkResult(b, "../archive/sub/x.md"), "accepted");
   });
 
+  test("a symlinked non-markdown file looks like a missing one, wherever it points", () => {
+    const b = brain();
+    const outside = tempDir();
+    fs.writeFileSync(path.join(outside, "id_rsa"), "secret");
+    fs.mkdirSync(path.join(b.root, "notes"), { recursive: true });
+    fs.symlinkSync(path.join(outside, "id_rsa"), path.join(b.root, "notes", "present.bin"));
+    fs.symlinkSync(path.join(outside, "absent"), path.join(b.root, "notes", "absent.bin"));
+    const missing = linkResult(b, "nothing.bin");
+    assert.ok(missing.includes("link-unavailable"), missing);
+    assert.equal(linkResult(b, "present.bin"), missing);
+    assert.equal(linkResult(b, "absent.bin"), missing);
+  });
+
   test("non-markdown files inside note folders are fine", () => {
     const b = brain();
     b.write("notes/chart.png", "png");

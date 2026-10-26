@@ -99,6 +99,7 @@ export function runImportMemory(args: Namespace, config: Config, tone: string): 
   if (!args.fromHook) {
     const result = importMemory(new Access(config), options);
     out(say("out_imported", tone, { count: result.changed.length, sync: result.sync }) + "\n");
+    for (const path of result.kept) out(say("out_import_kept", tone, { path }) + "\n");
     return 0;
   }
   // A hook: import only the session's project, and never block the session (Claude Code treats exit 2 as one).

@@ -127,6 +127,19 @@ describe("sync", () => {
     assert.equal(s.git(["show", "--name-only", "--format=", "HEAD"]), "notes/first.md");
   });
 
+  test("a foreign staged rename stays staged and out of the note commit", () => {
+    const s = synced();
+    excludeTools(s);
+    s.brain.write("scripts/tool-old.py", "print('tool')\n");
+    s.brain.commit("Add tool");
+    s.git(["push", "-q"]);
+    s.git(["mv", "scripts/tool-old.py", "scripts/tool-new.py"]);
+    s.brain.write("notes/first.md", "updated\n");
+    syncRepository(s.brain.config);
+    assert.equal(s.git(["show", "--name-only", "--format=", "HEAD"]), "notes/first.md");
+    assert.equal(s.git(["status", "--porcelain"]), "R  scripts/tool-old.py -> scripts/tool-new.py");
+  });
+
   test("sync with only excluded changes creates no commit", () => {
     const s = synced();
     excludeTools(s);

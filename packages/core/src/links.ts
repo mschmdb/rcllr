@@ -200,7 +200,9 @@ export function linkIssues(access: Access, note: Note, overlay: ReadonlyMap<stri
         rel = rel + "/" + layout.topicReadme;
         targetPath = join(access.root, rel);
       }
-      if (!overlay.has(rel) && !isFile(targetPath)) {
+      // isFile follows symlinks, so a symlink on the way must fail first: a link through one would tell whether
+      // its target outside the brain exists.
+      if (!overlay.has(rel) && (!insideWithoutSymlinks(access.root, targetPath) || !isFile(targetPath))) {
         problem("link-unavailable", "link_unavailable");
         continue;
       }

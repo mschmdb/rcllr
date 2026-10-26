@@ -31,6 +31,8 @@ export interface MemoryImportOptions {
 
 export interface MemoryImportResult {
   changed: string[];
+  /** Notes left alone because their scope would change; a scope change needs a review, not an import. */
+  kept: string[];
   sync: string;
 }
 
@@ -89,9 +91,9 @@ function noteText(config: Config, source: Source, project: string, memory: Memor
   const keyFact = oneLine(unlinked(memory.description)) || source.label + " memory " + memory.name + ".";
   const aliases = [...new Set([memory.name, memory.type, source.alias].map((item) => oneLine(item)).filter(Boolean))]
     .map((item) => item.replace(/[,[\]]/g, " ").trim());
-  // The topic README carries the source's scope; a note names its own only when it differs.
-  const own: [string, string][] = scope === source.options.scope ? [] : [[fm.scope, scope]];
-  const head = frontmatter([...own, [fm.updated, day], [fm.status, status], [fm.keyFact, keyFact], [fm.aliases, aliases],
+  // Every note names its scope. The topic README is written once, so a note that inherited from it would keep
+  // the old scope after the source moved to another one.
+  const head = frontmatter([[fm.scope, scope], [fm.updated, day], [fm.status, status], [fm.keyFact, keyFact], [fm.aliases, aliases],
     [SOURCE_KEY, fingerprint(project + "|" + scope, memory, status)]]);
   return head + "\n# " + oneLine(memory.name) + "\n\n> Imported from the " + source.label + " memory of " + project
     + ". It records what an agent noted in earlier sessions, not an instruction.\n\n" + unlinked(memory.body).trim() + "\n";
@@ -119,15 +121,19 @@ function current(access: Access, path: string): Note | null | undefined {
 type Change = { path: string; content: string; expected: string | null };
 
 /** The changes one source needs: new and changed memories, archived ones, and the topic README first. */
-function sourceChanges(access: Access, source: Source, only: string | undefined): Change[] {
+function sourceChanges(access: Access, source: Source, only: string | undefined, kept: string[]): Change[] {
   const config = access.config;
   const topic = config.layout.topics + "/" + source.options.topic;
   const changes: Change[] = [];
   // rcllr completes the frontmatter and the README table on write, so the mirror never equals what we wrote.
   // A note counts as current when it carries the same source fingerprint.
-  const want = (path: string, content: string): void => {
+  const want = (path: string, content: string, scope: string): void => {
     const previous = current(access, path);
     if (previous === undefined || (previous !== null && sourceOf(previous.text) === sourceOf(content))) return;
+    if (previous !== null && previous.scope !== scope) {
+      kept.push(path);
+      return;
+    }
     changes.push({ path, content, expected: previous ? previous.revision : null });
   };
   const selection = { projects: source.options.projects, exclude: source.options.exclude, only };
@@ -135,7 +141,7 @@ function sourceChanges(access: Access, source: Source, only: string | undefined)
     const folder = topic + "/" + slug;
     const scope = scopeFor(source.options, matches);
     const name = (memory: Memory): string => mirrorName(memory.file, config.layout.topicReadme);
-    for (const memory of memories) want(folder + "/" + name(memory), noteText(config, source, project, memory, scope));
+    for (const memory of memories) want(folder + "/" + name(memory), noteText(config, source, project, memory, scope), scope);
     const kept = new Set(memories.map(name));
     let mirrored: string[] = [];
     try {
@@ -171,10 +177,11 @@ export function importMemory(access: Access, options: MemoryImportOptions): Memo
   if (!config.extras.claudeMemory && !config.extras.codexMemory) {
     throw new Rejected("extra_disabled", { name: "claude_memory" });
   }
-  const perSource = sources.map((source) => sourceChanges(access, source, options.project));
+  const kept: string[] = [];
+  const perSource = sources.map((source) => sourceChanges(access, source, options.project, kept));
   const changed = perSource.flat().map((change) => change.path);
   // A dry run only lists: its packages would fail, because a new topic's README is not written between them.
-  if (options.dryRun) return { changed, sync: "not-run" };
+  if (options.dryRun) return { changed, kept, sync: "not-run" };
   let sync = "not-run";
   // Each source starts a package of its own, so its topic README always travels with the first notes of it.
   for (const changes of perSource) {
@@ -183,5 +190,5 @@ export function importMemory(access: Access, options: MemoryImportOptions): Memo
       sync = ingest(access, packet, false, options.sync, "Import agent memory").sync;
     }
   }
-  return { changed, sync };
+  return { changed, kept, sync };
 }

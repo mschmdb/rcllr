@@ -236,3 +236,34 @@ test("a scope_by_project entry without a known scope is rejected", () => {
   assert.equal(result.code, 2);
   assert.ok(result.err.includes("claude_memory.scope_by_project"), result.err);
 });
+
+test("imported notes name their scope, so a README with another scope never decides it", () => {
+  const target = enabled();
+  target.write("topics/claude-memory/README.md", "---\nscope: work\nstatus: active\nkey_fact: Planted.\n---\n\n# Claude memory\n");
+  target.commit("Planted README");
+  run(target, claudeHome({ "a.md": memoryFile("a", "A habit.", "Body.") }));
+  const path = "topics/claude-memory/users-me-sites-shop/a.md";
+  assert.match(target.read(path), /^scope: memory-claude$/m);
+  assert.throws(() => new Access(target.config, "work").read(path));
+});
+
+test("after a source moves to another scope, existing notes keep theirs and are listed; new ones take the new scope", () => {
+  const target = brain();
+  target.toml = target.toml.replace(/^remote = .*\n/m, "");
+  target.configure('[extras]\nclaude_memory = true\n[claude_memory]\nprojects = ["' + PROJECT + '"]\nscope = "work"\n');
+  target.gitInit();
+  target.commit("Initial");
+  const home = claudeHome({ "a.md": memoryFile("a", "A habit.", "Body.") });
+  run(target, home);
+
+  target.write("rcllr.toml", target.read("rcllr.toml").replace('scope = "work"', 'scope = "private"'));
+  target.commit("Move the memory to private");
+  fs.writeFileSync(path.join(home, "projects", claudeProjectFolder(PROJECT), "memory", "b.md"), memoryFile("b", "Another.", "Body."));
+  const result = run(target, home);
+  const folder = "topics/claude-memory/users-me-sites-shop/";
+  assert.deepEqual(result.kept, [folder + "a.md"]);
+  assert.deepEqual(result.changed, [folder + "b.md"]);
+  assert.equal(new Access(target.config, "work").read(folder + "a.md").scope, "work");
+  assert.equal(new Access(target.config, "private").read(folder + "b.md").scope, "private");
+  assert.throws(() => new Access(target.config, "work").read(folder + "b.md"));
+});
