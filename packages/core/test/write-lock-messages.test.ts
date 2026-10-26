@@ -6,7 +6,7 @@ import * as path from "node:path";
 import { describe, test } from "node:test";
 
 import { AccessDenied, RcllrError, Rejected } from "../src/errors.ts";
-import { withRepositoryLock } from "../src/lock.ts";
+import { lockPath, withRepositoryLock } from "../src/lock.ts";
 import { CHEEKY, INFO_KEYS, PLAIN, text } from "../src/messages.ts";
 import { tempDir } from "./helpers.ts";
 
@@ -27,6 +27,25 @@ describe("lock", () => {
     });
     assert.ok(error instanceof RcllrError);
     assert.equal(error.key, "busy");
+  });
+
+  test("a lock path that cannot be read gives up after the timeout instead of spinning", () => {
+    const root = tempDir();
+    const lock = lockPath(root);
+    fs.mkdirSync(lock);
+    try {
+      const started = Date.now();
+      let error: unknown;
+      try {
+        withRepositoryLock(root, () => {}, 0.2);
+      } catch (caught) {
+        error = caught;
+      }
+      assert.ok(error instanceof RcllrError && error.key === "busy", String(error));
+      assert.ok(Date.now() - started < 5000);
+    } finally {
+      fs.rmSync(lock, { recursive: true, force: true });
+    }
   });
 
   test("lock is released", () => {

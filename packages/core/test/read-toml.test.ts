@@ -60,3 +60,7 @@ test("tomlEscape round-trips Windows paths, quotes and control characters in a b
   }
   assert.equal(tomlEscape("me@example.org:me/brain.git"), "me@example.org:me/brain.git");
 });
+
+test("a table reached through a dotted key cannot be opened again with a header", () => {
+  assert.throws(() => parseToml("[a.b.c]\nx = 1\n[a]\nb.d = 2\n[a.b]\nx = 3\n"), TomlError);
+});

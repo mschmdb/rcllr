@@ -387,3 +387,24 @@ test("the report summary stays silent without findings and counts them otherwise
   assert.equal(reportSummary(target.config), "Report: 0 stale, 0 without date, 1 without key fact. "
     + "Run `rcllr meta report` for details.");
 });
+
+test("migrate never drops a sensitivity marker, even one in frontmatter it cannot keep", () => {
+  const target = repo();
+  target.write("INDEX.md", BASE_INDEX);
+  const text = "---\nnotes: |\n  > SENSITIVE\n---\n\n# Hidden\n\nBody.\n";
+  target.write("notes/hidden.md", text);
+  migrate(target.config);
+  assert.ok(target.read("notes/hidden.md").includes("> SENSITIVE"));
+});
+
+test("generate leaves a README under sources byte for byte", () => {
+  const target = repo();
+  target.write("INDEX.md", BASE_INDEX);
+  target.write("topics/a/README.md", "---\nkey_fact: A.\n---\n\n# A\n");
+  target.write("topics/a/note.md", "---\nkey_fact: Note.\n---\n\n# Note\n");
+  const original = "# Original README\n\nVerbatim.\n";
+  target.write("topics/a/sources/README.md", original);
+  target.write("topics/a/sources/doc.md", "# Doc\n");
+  generate(target.config);
+  assert.equal(target.read("topics/a/sources/README.md"), original);
+});

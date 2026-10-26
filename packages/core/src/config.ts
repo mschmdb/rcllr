@@ -407,6 +407,16 @@ function validate(config: Config): void {
     throw invalid("links.output", "must lie outside the note folders, or it becomes a searchable note");
   }
   relativePath(config.links.entitiesFile, "links.entities_file");
+  // Entity names land in the links map: a file among the notes could carry names from a hidden note.
+  if ((layout.roots as readonly string[]).includes(parts(config.links.entitiesFile)[0]!)) {
+    throw invalid("links.entities_file", "must lie outside the note folders");
+  }
+  // The hooks overwrite the paths file, so it must not be any other file rcllr reads or writes.
+  const taken = [CONFIG_NAME, LEGACY_CONFIG_NAME, layout.index, config.links.output, config.context.routesFile,
+    config.links.entitiesFile, "AGENTS.md", "CLAUDE.md"];
+  if (taken.includes(sensitive.pathsFile) || sensitive.pathsFile.endsWith(".md")) {
+    throw invalid("sensitive.paths_file", "must not be the config, a Markdown file or another file rcllr uses");
+  }
   relativePath(config.curator.reportDir, "curator.report_dir", true, true);
   validateMemorySources(config);
 

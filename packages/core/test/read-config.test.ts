@@ -142,6 +142,11 @@ describe("config", () => {
     ["[limits]\nfind_limit = 0\n", "limits.find_limit"],
     ["[extras]\nlinks = 'yes'\n", "extras.links"],
     ["[links]\noutput = '/etc/passwd'\n", "links.output"],
+    ["[sensitive]\npaths_file = 'rcllr.toml'\n", "sensitive.paths_file"],
+    ["[sensitive]\npaths_file = 'INDEX.md'\n", "sensitive.paths_file"],
+    ["[sensitive]\npaths_file = 'entities.txt'\n", "sensitive.paths_file"],
+    ["[links]\nentities_file = 'notes/people.md'\n", "links.entities_file"],
+    ["[links]\nentities_file = 'topics/health/names.txt'\n", "links.entities_file"],
   ];
   for (const [snippet, key] of invalid) {
     test("invalid values name the key: " + JSON.stringify(snippet), () => {

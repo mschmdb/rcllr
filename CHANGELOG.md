@@ -9,7 +9,7 @@ All notable changes to this project are listed here. The format follows
 
 ### Security
 
-Found in a cross-provider review (Codex) of the access, write, sync and install code.
+Found in a cross-provider review (Codex) of the whole core.
 
 - `import-memory` writes the scope into every imported note. Before, a note named its scope only when it differed
   from the source's, and inherited the rest from the topic README, which is written once. A source moved from `work`
@@ -24,6 +24,13 @@ Found in a cross-provider review (Codex) of the access, write, sync and install 
   remote had just marked as sensitive could still be written without `--allow-sensitive`.
 - Sync stops when a push URL differs from the configured remote. Before, only the fetch URL was checked, and a
   `remote.origin.pushurl` could send notes to another repository.
+- `links.entities_file` must lie outside the note folders, and a symlinked entities file is refused. Entity names
+  land in the links map, so a hidden note or a file outside the brain could put its words there.
+- `sensitive.paths_file` must not be `rcllr.toml`, a Markdown file or another file rcllr uses. The hooks overwrite it.
+- `meta migrate` never removes a sensitivity marker. A marker inside frontmatter the parser cannot keep, a YAML block
+  scalar for example, was dropped, and the note became readable.
+- The pre-commit hook reads Git's file lists NUL-separated and stages generated files by their literal path. A
+  non-ASCII name or a folder named like a pattern (`*`) could stage a file with unstaged human edits.
 
 ### Changed
 
@@ -34,6 +41,10 @@ Found in a cross-provider review (Codex) of the access, write, sync and install 
 
 - A rebase before a write keeps changes someone staged outside the notes staged. `--autostash` restored them as
   unstaged.
+- `meta index` leaves a README under `sources/` byte for byte, as promised for originals.
+- A lock that cannot be read, a folder in its place for example, makes a write wait for the timeout instead of
+  retrying forever. The lock lives in the shared temp folder.
+- The TOML parser rejects reopening a table with a header after a dotted key extended it.
 
 ## [0.5.5] - 2026-10-24
 

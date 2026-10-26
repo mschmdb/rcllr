@@ -225,6 +225,8 @@ class Parser {
         this.meta.dotted.add(created);
         target = created;
       } else if (isTable(existing) && !this.meta.inline.has(existing) && !this.meta.defined.has(existing)) {
+        // An implicit table extended by a dotted key counts as defined by it: a later [header] may not reopen it.
+        this.meta.dotted.add(existing);
         target = existing;
       } else {
         this.fail("Cannot overwrite a value");
