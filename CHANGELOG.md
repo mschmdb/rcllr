@@ -5,6 +5,8 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-10-26
+
 ### Security
 
 Found in a cross-provider review (Codex) of the access, write, sync and install code.

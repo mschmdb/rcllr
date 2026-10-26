@@ -43,6 +43,6 @@ export { dumpJson, openNotes, require as requireExtra, type Scan } from "./extra
 export * as linksExtra from "./extras/links.ts";
 export * as curator from "./extras/curator.ts";
 
-export const VERSION = "0.5.5";
+export const VERSION = "0.5.6";
 export { migrateName, type NameMigration } from "./migrate.ts";
 export { importMemory, sessionProject, type MemoryImportResult } from "./memory.ts";
