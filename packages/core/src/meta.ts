@@ -60,6 +60,7 @@ export function migrate(config: Config, dryRun = false, only: readonly string[] 
   const indexRows = scrapeRows(readText(join(config.root, config.layout.index)));
   const cache = new Map<string, Map<string, Row>>();
   const changed: string[] = [];
+  const sensitivity = Sensitivity.load(config);
   for (const rel of iterNoteFiles(config)) {
     if ((only && only.length > 0 && !only.includes(rel)) || isSource(rel, config.layout)) continue;
     const path = join(config.root, rel);
@@ -89,6 +90,8 @@ export function migrate(config: Config, dryRun = false, only: readonly string[] 
     const ordered: Data = new Map([...data].filter(([key]) => !fm.fieldOrder.includes(key)));
     for (const key of fm.fieldOrder) ordered.set(key, data.get(key)!);
     const updated = dumpFrontmatter(ordered) + body;
+    // Frontmatter the parser cannot keep (a block scalar, say) may hold the marker: never unhide a note.
+    if (sensitivity.hasMarker(text) && !sensitivity.hasMarker(updated)) continue;
     if (updated !== text) {
       changed.push(rel);
       if (!dryRun) writeGenerated(path, updated);
@@ -217,6 +220,7 @@ export function generate(config: Config, dryRun = false): string[] {
 
   for (const name of [...topicDirs(config), ...subTopicDirs(config, notes)]) {
     const rel = config.layout.topics + "/" + name + "/" + config.layout.topicReadme;
+    if (isSource(rel, config.layout)) continue; // originals under sources/ stay byte for byte
     const text = readRaw(join(config.root, rel));
     if (text !== null) put(rel, text, renderReadme(config, name, text, notes, sensitivity)); // unreadable or symlinked READMEs stay untouched
   }

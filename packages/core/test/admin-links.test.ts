@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
@@ -210,3 +211,14 @@ for (const out of ["/tmp/outside.md", "../up.md", ".git/hooks/pre-commit", "note
     assert.ok(result.err.includes("inside the brain"));
   });
 }
+
+test("a symlinked entities file is refused, so nothing outside the brain names entities", () => {
+  const target = repo();
+  const outside = path.join(fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "rcllr-")), "names.txt");
+  fs.writeFileSync(outside, "TOP-SECRET|meeting\n");
+  fs.symlinkSync(outside, path.join(target.root, "entities.txt"));
+  target.write("topics/a/note.md", "A meeting today.\n");
+  target.write("topics/b/note.md", "Another meeting.\n");
+  target.commit();
+  assert.throws(() => build(target.config, 1), /symlink/);
+});

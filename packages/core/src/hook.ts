@@ -73,6 +73,16 @@ export function gitLines(config: Config, ...args: string[]): string[] {
   return done.code === 0 ? splitlines(done.stdout) : [];
 }
 
+/** Paths from a git command, NUL-separated: by default Git quotes names with non-ASCII characters. */
+function gitPaths(config: Config, ...args: string[]): string[] {
+  const done = run("git", [...args, "-z"], { cwd: config.root, timeoutS: config.limits.gitTimeoutS });
+  if (done.failed) {
+    throw new Error("Command '[" + ["git", ...args, "-z"].map(repr).join(", ") + "]' timed out after "
+      + config.limits.gitTimeoutS + " seconds");
+  }
+  return done.code === 0 ? done.stdout.split("\0").filter(Boolean) : [];
+}
+
 /**
  * Stage generated changes, but never a file with unstaged human edits: they would ride along.
  *
@@ -87,7 +97,8 @@ export function stage(config: Config, paths: readonly string[], unstaged: Readon
   }
   if (hidden.length > 0) output.out(say("hook_unstaged_hidden", "plain", { count: hidden.length }) + "\n");
   const ready = paths.filter((path) => !unstaged.has(path));
-  if (ready.length > 0) gitLines(config, "add", "--", ...ready);
+  // :(literal): a folder named like a pattern, `*` say, must not stage other files with it.
+  if (ready.length > 0) gitLines(config, "add", "--", ...ready.map((path) => ":(literal)" + path));
 }
 
 /** Where the pre-commit hook keeps the counts it printed last: inside the Git folder, never in the tree. */
@@ -123,7 +134,7 @@ export function reportLine(config: Config): string {
 export function preCommit(config: Config, output: HookOutput): number {
   if (!isFile(join(config.root, config.layout.index))) return 0;
   try {
-    const unstaged = new Set(gitLines(config, "diff", "--name-only"));
+    const unstaged = new Set(gitPaths(config, "diff", "--name-only"));
     const pathsFile = join(config.root, config.sensitive.pathsFile);
     const fresh = Sensitivity.generate(config);
     const current = isFile(pathsFile) ? readText(pathsFile) : null;
@@ -134,7 +145,7 @@ export function preCommit(config: Config, output: HookOutput): number {
       output.out(say("out_paths_file_updated", "plain", { file: config.sensitive.pathsFile }) + "\n");
     }
     const notes = new Set(iterNoteFiles(config));
-    const staged = gitLines(config, "diff", "--cached", "--name-only", "--diff-filter=ACMR")
+    const staged = gitPaths(config, "diff", "--cached", "--name-only", "--diff-filter=ACMR")
       .filter((rel) => notes.has(rel) && !unstaged.has(rel) && !readText(join(config.root, rel)).startsWith("---"));
     if (staged.length > 0) stage(config, migrate(config, false, staged), unstaged, output);
     stage(config, generate(config), unstaged, output);

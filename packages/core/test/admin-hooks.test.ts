@@ -7,7 +7,7 @@ import { test } from "node:test";
 
 import { Access } from "../src/access.ts";
 import type { Config } from "../src/config.ts";
-import { agentEvent, type HookOutput, isBrainPath, preCommit } from "../src/hook.ts";
+import { agentEvent, type HookOutput, isBrainPath, preCommit, stage } from "../src/hook.ts";
 import { syncRepository } from "../src/sync.ts";
 import { ingest } from "../src/write.ts";
 import { type Brain, brain, DEV_BIN, documentText, GIT_ENV, invoke, revision, spawnDev, synced, tempDir } from "./helpers.ts";
@@ -110,6 +110,37 @@ test("pre-commit regenerates the paths file and the indexes", () => {
   assert.ok(index.includes("notes/raw.md") && !index.includes("notes/hidden.md"));
   const staged = new Set(repo.git(["diff", "--cached", "--name-only"]).split("\n"));
   for (const rel of [".sensitive-paths", "INDEX.md", "notes/raw.md"]) assert.ok(staged.has(rel), rel);
+});
+
+test("pre-commit never stages a topic README with unstaged edits, also under a non-ASCII name", () => {
+  const repo = synced();
+  const target = repo.brain;
+  target.write("INDEX.md", "# Index\n\n## Topics\n\n## Notes (flat)\n\n## Bookmarks\n");
+  target.write("topics/café/README.md", documentText({ title: "Café" }));
+  target.write("topics/café/a.md", documentText({ title: "A" }));
+  repo.git(["add", "-A"]);
+  repo.git(["commit", "-q", "-m", "Base"]);
+  const committed = target.read("topics/café/README.md");
+  target.write("topics/café/b.md", documentText({ title: "B" }));
+  repo.git(["add", "-A"]);
+  target.write("topics/café/README.md", committed + "\nHuman edit, not staged.\n");
+  assert.equal(preCommit(target.config, new Captured()), 0);
+  assert.equal(repo.git(["show", ":topics/café/README.md"]) + "\n", committed);
+});
+
+test("pre-commit stages generated files by their literal path, never as a pattern", () => {
+  const repo = synced();
+  const target = repo.brain;
+  target.write("INDEX.md", "# Index\n\n## Topics\n\n## Notes (flat)\n\n## Bookmarks\n");
+  target.write("topics/real/README.md", documentText({ title: "Real" }));
+  target.write("topics/real/a.md", documentText({ title: "A" }));
+  repo.git(["add", "-A"]);
+  repo.git(["commit", "-q", "-m", "Base"]);
+  target.write("topics/real/README.md", target.read("topics/real/README.md") + "\nHuman edit, not staged.\n");
+  const out = new Captured();
+  // Stand-in for a generated path that Git would read as a pattern matching topics/real/README.md.
+  stage(target.config, ["topics/*/README.md"], new Set(), out);
+  assert.ok(!repo.git(["diff", "--cached", "--name-only"]).includes("topics/real/README.md"));
 });
 
 test("pre-commit skips repos without an index", () => {

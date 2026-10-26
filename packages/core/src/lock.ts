@@ -40,8 +40,10 @@ function clearStale(path: string): boolean {
   try {
     stat = fs.statSync(path);
     owner = Number.parseInt(fs.readFileSync(path, "utf-8"), 10);
-  } catch {
-    return true;
+  } catch (error) {
+    // Gone means free. Anything else (a folder, no read permission; the lock lives in the shared temp folder) is
+    // someone's lock we cannot judge: wait for the timeout instead of retrying at once forever.
+    return (error as NodeJS.ErrnoException).code === "ENOENT";
   }
   const orphan = !Number.isInteger(owner) && Date.now() - stat.mtimeMs > ORPHAN_MS;
   if (!orphan && (!Number.isInteger(owner) || owner === process.pid || alive(owner))) return false;

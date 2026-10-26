@@ -12,7 +12,7 @@ import { parseFrontmatter } from "../frontmatter.ts";
 import { getLocale, type Locale } from "../locale.ts";
 import { BOUNDARY, DIGIT, compare, compareTuples, escapeRegExp, format, ignoreCase, len, pyInt, splitlines, strip, WS } from "../py.ts";
 import { PyDate } from "../pydate.ts";
-import { isDir, isFile, isRelativeTo, isSymlink, join, parent, parts, readText, relativeTo, resolve, suffix, writeText } from "../pyos.ts";
+import { isDir, isFile, isRelativeTo, isSymlink, join, name, parent, parts, readText, relativeTo, resolve, suffix, writeText } from "../pyos.ts";
 import { openNotes, readNote, require } from "./common.ts";
 
 /** `\\d` of a Python str pattern. */
@@ -98,6 +98,8 @@ export function extractMonths(text: string, locale: Locale): string[] {
 
 /** One entity per line: `Name|alias|alias`. Prefix `i:` matches case-insensitively. */
 export function loadEntities(path: string): Entity[] {
+  // Like the routes file: a symlink could read names from anywhere into the links map.
+  if (isSymlink(path)) throw new Rejected("entities_symlink", { file: name(path) });
   if (!isFile(path)) return [];
   const entities: Entity[] = [];
   for (const raw of splitlines(readText(path))) {

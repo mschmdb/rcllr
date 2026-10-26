@@ -116,6 +116,7 @@ export const PLAIN: Readonly<Record<string, string>> = {
   "out_written": "{path} written.",
   "out_index_changed": "{count} file(s) updated.",
   "out_installed": "Installed: {what}",
+  "entities_symlink": "{file} is a symlink. The entities file must be a regular file inside the brain.",
   "install_symlink": "{path} is a symlink or lies in a symlinked folder. rcllr install writes only regular files inside the brain; replace the link with a file or folder.",
   "out_imported": "Imported agent memory: {count} file(s) changed; sync: {sync}.",
   "out_import_kept": "Kept in its old scope, because a scope change needs a review: {path}. Delete it to import it again in the new scope.",
