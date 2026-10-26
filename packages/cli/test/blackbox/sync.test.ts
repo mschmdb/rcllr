@@ -271,11 +271,11 @@ test("failed push after a write exits 3 and keeps the save", () => {
 
 test("a refused SSH login on push names the login after the save", () => {
   const world = synced();
-  const ssh = world.base + "/fake-ssh"; // Git runs core.sshCommand through sh, which eats backslashes.
-  fs.writeFileSync(ssh, "#!/bin/sh\necho 'git@example.invalid: Permission denied (publickey).' >&2\nexit 255\n", "utf-8");
-  fs.chmodSync(ssh, 0o755);
-  world.brain.git(["config", "remote.origin.pushurl", "git@example.invalid:me/brain.git"]);
-  world.brain.git(["config", "core.sshCommand", ssh]);
+  // A pre-push hook stands in for SSH: a push URL other than the remote would be refused before the save.
+  const hook = path.join(world.brain.root, world.brain.git(["rev-parse", "--git-path", "hooks"]), "pre-push");
+  fs.mkdirSync(path.dirname(hook), { recursive: true });
+  fs.writeFileSync(hook, "#!/bin/sh\necho 'git@example.invalid: Permission denied (publickey).' >&2\nexit 1\n", "utf-8");
+  fs.chmodSync(hook, 0o755);
   const result = world.brain.run(["write", "notes/fresh.md", "--expected", "new"], { stdin: md() });
   assert.equal(result.code, 3);
   assert.equal(result.err, "Markdown saved, but Git sync failed. Retry with `rcllr sync`.\n"

@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 
 import { Access, type Note } from "./access.ts";
-import { type Config, configFile } from "./config.ts";
+import { type Config, configFile, loadConfig } from "./config.ts";
 import { AccessDenied, Rejected, SyncError } from "./errors.ts";
 import { type Issue, issue, linkIssues } from "./links.ts";
 import { withRepositoryLock } from "./lock.ts";
@@ -23,6 +23,8 @@ export const NEW_FILE_MODE = 0o600;
 export const seams = {
   atomicWrite: (path: string, data: Uint8Array): void => atomicWrite(path, data),
   prepareRepository: (config: Config): void => prepareRepository(config),
+  // A config built in code has no file to reload; one loaded from rcllr.toml is read again.
+  reloadConfig: (config: Config): Config => (exists(configFile(config.root)) ? loadConfig(config.root) : config),
   syncLocked: (config: Config, message: string | null = null): void => syncLocked(config, false, message),
 };
 
@@ -161,12 +163,13 @@ export function applyPlan(access: Access, plan: Plan): void {
 export function ingest(access: Access, packet: unknown, dryRun = false, sync = true,
                        message: string | null = null): WriteResult {
   checkCommitMessage(message);
-  const config = access.config;
-  return withRepositoryLock(config.root, () => {
+  return withRepositoryLock(access.config.root, () => {
+    let config = access.config;
     let current = access;
     if (sync && !dryRun) {
       seams.prepareRepository(config);
-      // The remote may have changed markers and scopes; read them again.
+      // The remote may have changed rcllr.toml, markers and scopes; load and read them again.
+      config = seams.reloadConfig(config);
       current = new Access(config, access.scope, access.topic, access.allowed);
     }
     const plan = validatePacket(current, packet);
@@ -204,7 +207,7 @@ export function ingest(access: Access, packet: unknown, dryRun = false, sync = t
       }
     }
     return result;
-  }, config.limits.lockTimeoutS);
+  }, access.config.limits.lockTimeoutS);
 }
 
 /** Files named explicitly in rcllr.toml that are missing. A default name may be absent without notice. */

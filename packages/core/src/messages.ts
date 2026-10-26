@@ -147,6 +147,7 @@ export const PLAIN: Readonly<Record<string, string>> = {
   "usage_error": "error: {message}",
   "usage_hint": "Try `{prog} --help`.",
   "usage_missing": "missing {names}",
+  "usage_missing_expected": "Pass new for a new file, otherwise the rev from read or context; --append needs it too.",
   "usage_unknown_command": "unknown command '{value}'. Commands: {choices}",
   "usage_choice": "{name} must be one of {choices}, not '{value}'",
   "usage_int": "{name} needs a whole number, not '{value}'",

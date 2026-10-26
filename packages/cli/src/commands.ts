@@ -18,7 +18,9 @@ export function register(add: (name: string) => Parser): void {
     const action = add(name);
     if (name === "write") {
       action.positional("path", HELP.path!);
-      action.option("--expected", { required: true, metavar: "REV", help: HELP.expected! });
+      action.option("--expected", {
+        required: true, metavar: "REV", help: HELP.expected!, missingHint: say("usage_missing_expected", "plain"),
+      });
       action.option("--append", { kind: "flag", help: HELP.append! });
     }
     outputOptions(action);

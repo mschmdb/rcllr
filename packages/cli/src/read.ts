@@ -36,7 +36,9 @@ export function runRead(args: Namespace, config: Config, tone: string): number {
         start = endArg === null || endArg >= first ? first : 1;
       }
       if (section !== null) [start, end] = headingRange(note.text, section);
-      packet = { hits: [sourceHit(note, start, end)], match: "direct", more: false, truncated: false };
+      // The revision also at the top: a single read is usually followed by write --expected.
+      packet = { revision: note.revision, hits: [sourceHit(note, start, end)], match: "direct", more: false,
+        truncated: false };
     }
     out(bounded(packet, args.maxChars as number, args.json as boolean, tone,
                 { notePartial: args.command !== "context" }));

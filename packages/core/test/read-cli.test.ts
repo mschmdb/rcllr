@@ -150,6 +150,22 @@ describe("cli read", () => {
     for (const line of hit.lines) assert.equal(line.text, original[line.n - 1]);
   });
 
+  test("read --json names the revision at the top, ready for write --expected", () => {
+    const b = brain();
+    b.note("notes/a.md", { body: "Text" });
+    const packet = JSON.parse(invoke(b, ["read", "notes/a.md", "--json"]).out);
+    assert.equal(packet.revision, packet.hits[0].revision);
+    assert.equal(JSON.parse(invoke(b, ["find", "Text", "--json"]).out).revision, undefined);
+  });
+
+  test("a write without --expected says what to pass, also for --append", () => {
+    const b = brain();
+    const result = invoke(b, ["write", "notes/a.md", "--append"]);
+    assert.equal(result.code, 2);
+    assert.ok(result.err.replace(/\s+/g, " ").includes("error: missing --expected. Pass new for a new file, otherwise the "
+      + "rev from read or context; --append needs it too."), result.err);
+  });
+
   test("read section does not match code and rejects ambiguity", () => {
     const b = brain();
     b.note("notes/a.md", { body: "```md\n## Review\nfake\n```\n## Review, today\nActual" });

@@ -110,7 +110,9 @@ test("revision is sha256 of the file bytes", () => {
 
 test("read JSON has the packet and hit keys", () => {
   const packet = JSON.parse(docker().run(["read", "notes/docker.md", "--json"]).out);
-  assert.deepEqual(sorted(Object.keys(packet)), sorted(PACKET_KEYS));
+  // A single read names the revision at the top too, ready for write --expected.
+  assert.deepEqual(sorted(Object.keys(packet)), sorted([...PACKET_KEYS, "revision"]));
+  assert.equal(packet.revision, packet.hits[0].revision);
   assert.deepEqual([packet.match, packet.more, packet.truncated], ["direct", false, false]);
   const hit = packet.hits[0];
   assert.deepEqual(sorted(Object.keys(hit)), sorted(HIT_KEYS));

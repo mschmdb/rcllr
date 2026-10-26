@@ -95,8 +95,14 @@ function verify(config: Config): void {
   if (git(config, ["symbolic-ref", "--short", "HEAD"]).stdout.trim() !== repo.branch) {
     throw new SyncError("git_branch", { branch: repo.branch });
   }
-  if (!repo.local && git(config, ["remote", "get-url", "--", remote]).stdout.trim() !== repo.remote) {
-    throw new SyncError("git_remote", { name: repo.remoteName });
+  if (!repo.local) {
+    // Push goes to remote.<name>.pushurl when one is set, so every push URL must match as well as the fetch URL.
+    const pushUrls = git(config, ["remote", "get-url", "--push", "--all", "--", remote]).stdout.split("\n")
+      .map((url) => url.trim()).filter(Boolean);
+    if (git(config, ["remote", "get-url", "--", remote]).stdout.trim() !== repo.remote
+      || pushUrls.some((url) => url !== repo.remote)) {
+      throw new SyncError("git_remote", { name: repo.remoteName });
+    }
   }
   for (const state of OPEN_OPERATIONS) {
     const location = git(config, ["rev-parse", "--git-path", state]).stdout.trim();
@@ -117,14 +123,25 @@ function refresh(config: Config): void {
   git(config, ["fetch", "--no-write-fetch-head", "--", remote,
     "refs/heads/" + branch + ":" + remoteRef(config)]);
   if (count(config, "HEAD.." + remoteRef(config))) {
+    // Not --autostash: it restores staged changes as unstaged. A stash popped with --index keeps both apart.
+    const stashed = stashForeign(config);
     try {
-      git(config, ["rebase", "--autostash", "--end-of-options", remoteRef(config)]);
+      git(config, ["rebase", "--end-of-options", remoteRef(config)]);
     } catch (error) {
       if (!(error instanceof SyncError)) throw error;
       git(config, ["rebase", "--abort"]);
       throw new SyncError("git_diverged");
+    } finally {
+      if (stashed) git(config, ["stash", "pop", "--index", "-q"]);
     }
   }
+}
+
+/** Stash tracked changes outside the notes before a rebase; true when there was something to stash. */
+function stashForeign(config: Config): boolean {
+  if (!git(config, ["status", "--porcelain", "--untracked-files=no"]).stdout.trim()) return false;
+  git(config, ["stash", "push", "-q", "-m", "rcllr: changes outside the notes, kept during a rebase"]);
+  return true;
 }
 
 /** Before a write: clean tree, then catch up with the remote, so markers and scopes are current. */

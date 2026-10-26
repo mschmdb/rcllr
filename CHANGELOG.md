@@ -18,6 +18,20 @@ Found in a cross-provider review (Codex) of the access, write, sync and install 
 - A link to a non-Markdown file through a symlink is unavailable, like a missing file. Before, `check` accepted it when
   the target outside the brain existed, which told whether that file exists.
 - The note commit no longer takes along the old path of a rename someone staged outside the notes.
+- A write checks against the `rcllr.toml` it just fetched. Before, it used the config it started with, so a note the
+  remote had just marked as sensitive could still be written without `--allow-sensitive`.
+- Sync stops when a push URL differs from the configured remote. Before, only the fetch URL was checked, and a
+  `remote.origin.pushurl` could send notes to another repository.
+
+### Changed
+
+- `read --json` names the revision at the top as well (`revision`), the same as `hits[0].revision`.
+- A write without `--expected` says what to pass: `new` or the rev from `read` or `context`, also with `--append`.
+
+### Fixed
+
+- A rebase before a write keeps changes someone staged outside the notes staged. `--autostash` restored them as
+  unstaged.
 
 ## [0.5.5] - 2026-10-24
 
