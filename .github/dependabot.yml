@@ -4,10 +4,18 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    # One PR per week for minor and patch updates; each major keeps its own PR.
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
     ignore:
       # @types/node follows the oldest supported Node line (engines: >=22.18). Raise it with the minimum.
       - dependency-name: "@types/node"
