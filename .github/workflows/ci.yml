@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels its older runs. Runs on main always finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     strategy:
@@ -20,31 +25,44 @@ jobs:
       run:
         shell: bash
     env:
+      # Pull requests test only Node 24; main tests both lines. The Node 22 jobs still report,
+      # because the ruleset requires every job name, but skip their steps and free the runner fast.
+      FULL: ${{ matrix.node == '24' || github.event_name != 'pull_request' }}
       # pnpm runs package scripts with cmd on Windows; the scripts are POSIX shell.
       npm_config_script_shell: ${{ matrix.os == 'windows-latest' && 'C:\Program Files\Git\bin\bash.exe' || '' }}
     steps:
-      - name: Keep line endings as committed
+      - if: env.FULL == 'true'
+        name: Keep line endings as committed
         run: git config --global core.autocrlf false
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - if: env.FULL == 'true'
+        uses: actions/checkout@v7
+      - if: env.FULL == 'true'
+        uses: pnpm/action-setup@v6
+      - if: env.FULL == 'true'
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
-      - name: Configure Git for test repositories
+      - if: env.FULL == 'true'
+        name: Configure Git for test repositories
         run: |
           git config --global user.name "CI"
           git config --global user.email "ci@example.com"
           git config --global init.defaultBranch main
-      - name: Install the packages, not the site
+      - if: env.FULL == 'true'
+        name: Install the packages, not the site
         run: pnpm install --frozen-lockfile --filter "./packages/**" --filter rcllr-workspace
-      - name: Type check
+      - if: env.FULL == 'true'
+        name: Type check
         run: pnpm typecheck
-      - name: Unit tests
+      - if: env.FULL == 'true'
+        name: Unit tests
         run: pnpm test
-      - name: Black-box suite against the built CLI
+      - if: env.FULL == 'true'
+        name: Black-box suite against the built CLI
         run: pnpm test:blackbox:dist
-      - name: Pack, install and run the npm tarballs
+      - if: env.FULL == 'true'
+        name: Pack, install and run the npm tarballs
         run: pnpm pack:check
 
   toml-test:
