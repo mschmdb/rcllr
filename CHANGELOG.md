@@ -5,6 +5,8 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-11-10
+
 ### Changed
 
 - Sensitive calls ask less often. Claude Code asked before every call with `--allow-sensitive`, even right
