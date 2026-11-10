@@ -42,6 +42,12 @@ test("install writes the Git hook and the agent hooks", () => {
   assert.ok(post.hooks[0].command.includes("hook agent"));
   assert.ok(post.hooks[0].command.includes("$CLAUDE_PROJECT_DIR"));
   assert.ok(settings.hooks.SessionEnd[0].hooks[0].command.includes("hook agent"));
+  const prompt = settings.hooks.UserPromptSubmit[0];
+  assert.equal(prompt.matcher, undefined);
+  assert.ok(prompt.hooks[0].command.includes("hook prompt") && prompt.hooks[0].command.includes("$CLAUDE_PROJECT_DIR"));
+  const pre = settings.hooks.PreToolUse[0];
+  assert.equal(pre.matcher, "Bash");
+  assert.ok(pre.hooks[0].command.includes("hook pre-tool") && pre.hooks[0].command.includes("$CLAUDE_PROJECT_DIR"));
   assert.equal(json(target, ".codex/hooks.json").hooks.PostToolUse[0].matcher, "Bash|apply_patch|Edit|Write");
   assert.ok(result.out.includes("Installed"));
 });
@@ -59,27 +65,58 @@ test("install is idempotent and keeps foreign settings", () => {
   assert.equal(settings.hooks.PostToolUse.length, 2);
 });
 
-test("install lets headless agents call rcllr, but asks before sensitive reads", () => {
+test("install lets agents call rcllr and leaves sensitive calls to the pre-tool hook", () => {
   const target = repo();
   assert.equal(invoke(target, ["install"]).code, 0);
   assert.deepEqual(json(target, ".claude/settings.json").permissions, {
     allow: ["Bash(rcllr *)", "Bash(dummkopf *)", "Bash(dk *)"],
-    ask: ["Bash(rcllr *--allow-sensitive*)", "Bash(dummkopf *--allow-sensitive*)", "Bash(dk *--allow-sensitive*)"],
   });
 });
 
-test("install keeps foreign permission rules and adds its own once", () => {
+test("install keeps foreign permission rules, adds its own once and drops its old ask rules", () => {
   const target = repo();
   target.write(".claude/settings.json", JSON.stringify({
-    permissions: { allow: ["Bash(dk *)"], ask: ["Bash(rm *)"], deny: ["Bash(rcllr *)"] },
+    permissions: { allow: ["Bash(dk *)"], ask: ["Bash(rm *)", "Bash(rcllr *--allow-sensitive*)",
+      "Bash(dk *--allow-sensitive*)", "Bash(rcllr read *--allow-sensitive*)"], deny: ["Bash(rcllr *)"] },
   }));
   assert.equal(invoke(target, ["install"]).code, 0);
   assert.deepEqual(json(target, ".claude/settings.json").permissions, {
     allow: ["Bash(dk *)", "Bash(rcllr *)", "Bash(dummkopf *)"],
-    ask: ["Bash(rm *)", "Bash(rcllr *--allow-sensitive*)", "Bash(dummkopf *--allow-sensitive*)",
-      "Bash(dk *--allow-sensitive*)"],
+    ask: ["Bash(rm *)", "Bash(rcllr read *--allow-sensitive*)"],
     deny: ["Bash(rcllr *)"],
   });
+});
+
+test("install upgrades a brain from the ask rules to the hooks in one step", () => {
+  const target = repo();
+  assert.equal(invoke(target, ["install"]).code, 0);
+  const settings = json(target, ".claude/settings.json");
+  settings.permissions.ask = ["Bash(rcllr *--allow-sensitive*)", "Bash(dummkopf *--allow-sensitive*)",
+    "Bash(dk *--allow-sensitive*)"];
+  for (const event of ["UserPromptSubmit", "PreToolUse"]) {
+    settings.hooks[event][0].hooks[0].command = settings.hooks[event][0].hooks[0].command.replace("PATH=", "OLD=1 PATH=");
+  }
+  target.write(".claude/settings.json", JSON.stringify(settings));
+  assert.equal(invoke(target, ["install"]).code, 0);
+  const upgraded = json(target, ".claude/settings.json");
+  assert.equal(upgraded.permissions.ask, undefined);
+  for (const event of ["UserPromptSubmit", "PreToolUse"]) {
+    assert.equal(upgraded.hooks[event].length, 1, event);
+    assert.equal(upgraded.hooks[event][0].hooks.length, 1, event);
+    assert.ok(!upgraded.hooks[event][0].hooks[0].command.includes("OLD=1"), event);
+  }
+});
+
+test("install keeps foreign prompt and pre-tool hooks", () => {
+  const target = repo();
+  target.write(".claude/settings.json", JSON.stringify({ hooks: {
+    UserPromptSubmit: [{ hooks: [{ type: "command", command: "echo mine" }] }],
+    PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "guard.sh" }] }],
+  } }));
+  assert.equal(invoke(target, ["install"]).code, 0);
+  const hooks = json(target, ".claude/settings.json").hooks;
+  assert.deepEqual(hooks.UserPromptSubmit.flatMap((entry: any) => entry.hooks.map((hook: any) => hook.command)).length, 2);
+  assert.ok(hooks.PreToolUse.some((entry: any) => entry.hooks.some((hook: any) => hook.command === "guard.sh")));
 });
 
 test("install rejects permissions that are not lists and changes nothing", () => {
@@ -225,7 +262,7 @@ test("reinstall upgrades older rcllr hook commands", () => {
   for (const entries of Object.values(settings.hooks) as any[][]) {
     for (const entry of entries) for (const hook of entry.hooks) commands.push(hook.command);
   }
-  assert.equal(commands.length, 2);
+  assert.equal(commands.length, 4, "two agent hooks, the prompt hook and the pre-tool hook");
   assert.ok(commands.every((command) => command.includes("$HOME/.local/bin")));
 });
 

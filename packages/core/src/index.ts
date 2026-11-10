@@ -39,10 +39,11 @@ export { type Entry, entry, generate, migrate, newestFirst, refreshPathsFile, re
 export { init, renderAgents } from "./scaffold.ts";
 export { install } from "./install.ts";
 export { agentEvent, type HookOutput, preCommit } from "./hook.ts";
+export { type Decision, preToolEvent, promptEvent } from "./permission-hook.ts";
 export { dumpJson, openNotes, require as requireExtra, type Scan } from "./extras/common.ts";
 export * as linksExtra from "./extras/links.ts";
 export * as curator from "./extras/curator.ts";
 
-export const VERSION = "0.5.6";
+export const VERSION = "0.5.7";
 export { migrateName, type NameMigration } from "./migrate.ts";
 export { importMemory, sessionProject, type MemoryImportResult } from "./memory.ts";

@@ -6,8 +6,8 @@ import * as path from "node:path";
 import {
   Access, agentEvent, type Config, curator, RcllrError, dumpJson, findRoot, generate, HELP, importMemory, init,
   install, linksExtra, sessionProject,
-  loadConfig, loadsJson, LOCALES, message as say, metaReport, migrate, migrateName, preCommit, refreshPathsFile,
-  renderAgents, requireExtra,
+  loadConfig, loadsJson, LOCALES, message as say, metaReport, migrate, migrateName, preCommit, preToolEvent,
+  promptEvent, refreshPathsFile, renderAgents, requireExtra,
 } from "@rcllr/core";
 
 import type { Namespace, Parser } from "./argparse.ts";
@@ -30,7 +30,7 @@ export function register(add: (name: string) => Parser): void {
   command = add("migrate-name");
   command.option("--apply", { kind: "flag", help: HELP.migrate_apply! });
   command = add("hook");
-  command.positional("kind", HELP.hook_kind!, { choices: ["pre-commit", "agent"] });
+  command.positional("kind", HELP.hook_kind!, { choices: ["pre-commit", "agent", "prompt", "pre-tool"] });
   command = add("meta");
   command.positional("action", HELP.meta_action!, { choices: ["migrate", "generate", "report", "index", "agents"] });
   command.option("--dry-run", { kind: "flag", help: HELP.dry_run! });
@@ -66,20 +66,23 @@ export function runInit(args: Namespace, root: string, tone: string): number {
 /** Hooks must never return 2: Claude Code treats exit 2 as a blocking error. */
 export function runHook(args: Namespace, root: string, tone: string): number {
   void tone;
-  let config: Config;
+  let config: Config | null = null;
   try {
     config = loadConfig(findRoot(process.cwd(), root));
   } catch (error) {
-    if (error instanceof RcllrError) return 0;
-    throw error;
+    if (!(error instanceof RcllrError)) throw error;
   }
-  if (args.kind === "pre-commit") return preCommit(config, output);
+  if (args.kind === "pre-commit") return config === null ? 0 : preCommit(config, output);
   let event: unknown;
   try {
     event = loadsJson(readStdin());
   } catch {
     return 0;
   }
+  // Without a config the pre-tool hook still answers: a sensitive call then asks instead of slipping through.
+  if (args.kind === "pre-tool") return preToolEvent(event, config, output);
+  if (config === null) return 0;
+  if (args.kind === "prompt") return promptEvent(event, config, output);
   return agentEvent(event, config, output);
 }
 

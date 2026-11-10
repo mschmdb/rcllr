@@ -5,6 +5,24 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-11-10
+
+### Changed
+
+- Sensitive calls ask less often. Claude Code asked before every call with `--allow-sensitive`, even right
+  after the user named the topic. Two new hooks replace the `ask` rules: `rcllr hook prompt` turns sensitive
+  topics named in a prompt (folder or file name, or an alias) into grants for that session, and
+  `rcllr hook pre-tool` allows calls those grants cover and asks for the rest. Grants live in
+  `.git/rcllr/grants.json`. Run `rcllr install` again: it adds both hooks and removes the old `ask` rules in
+  one step, since an `ask` rule would beat the hook's "allow".
+
+### Security
+
+- The pre-tool hook also asks when it cannot read the flag for sure: abbreviations such as `--allow`, values
+  from variables, globs or substitutions, and flags inside `bash -c`, `eval` or an unquoted heredoc. The old
+  `ask` rule matched only the full flag at the start of an rcllr call. Headless runs still cannot open a
+  sensitive note, because nobody can answer the question.
+
 ## [0.5.6] - 2026-10-26
 
 ### Security

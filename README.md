@@ -203,7 +203,7 @@ One signal stays by design: whoever may write packets learns whether a path is t
 existing hidden file fails with `path_denied`, also inside a hidden topic. A free path in a hidden topic fails with
 `topic_unavailable`, like a path in a missing topic. A new `README.md` in a hidden folder answers like a missing topic,
 whether notes sit below it or not. An agent may pass `--allow-sensitive <path>` only after the user named the topic in the current prompt;
-`AGENTS.md` says so. The pre-commit hook derives `.sensitive-paths` from the markers, so `rg --ignore-file`
+`AGENTS.md` says so, and the hooks in [Sensitive calls](#sensitive-calls) check it. The pre-commit hook derives `.sensitive-paths` from the markers, so `rg --ignore-file`
 works as a fallback without the CLI.
 
 Write rules rcllr enforces:
@@ -272,8 +272,12 @@ Codex reads `AGENTS.md` directly. `rcllr install` adds:
   Both run `rcllr hook agent`, which commits note changes and, in a synced brain, pushes them.
 - `.codex/hooks.json` (with `extras.codex_sync`): the same hook for Codex tools. Check that your Codex
   version has hooks enabled.
+- `.claude/settings.json`: a `UserPromptSubmit` hook (`rcllr hook prompt`) and a `PreToolUse` hook on `Bash`
+  (`rcllr hook pre-tool`). Together they decide when Claude Code asks before a sensitive call. See
+  [Sensitive calls](#sensitive-calls).
 - `permissions` in `.claude/settings.json`: `allow` rules for `Bash(rcllr *)` and the old names `dummkopf` and
-  `dk`, and `ask` rules for any call with `--allow-sensitive`. See [Headless agents](#headless-agents).
+  `dk`. Older releases also wrote `ask` rules for `--allow-sensitive`; `install` removes exactly those.
+  See [Headless agents](#headless-agents).
 
 Existing settings stay; `install` only adds its own entries and can run again safely. Moving from an older
 sync setup? `rcllr install --replace-command old_sync.py` removes hook commands containing that text first,
@@ -297,23 +301,46 @@ needs approval and no rule allows, and report the denial only in their result. W
 cannot call `rcllr` at all. Claude Code on the web applies the rules from the repository's
 `.claude/settings.json`, too.
 
-Inside the brain, `rcllr install` writes the rules. From other projects, add them yourself, for example
+Inside the brain, `rcllr install` writes the rule. From other projects, add it yourself, for example
 to `~/.claude/settings.json`:
 
 ```json
 {
   "permissions": {
-    "allow": ["Bash(rcllr *)"],
-    "ask": ["Bash(rcllr *--allow-sensitive*)"]
+    "allow": ["Bash(rcllr *)"]
   }
 }
 ```
 
-`ask` wins over `allow`. In a terminal, Claude Code asks you before it opens a sensitive note. Headless, nobody
-can confirm, so the call fails. That matches the rule in `AGENTS.md`: only the user opens a sensitive topic.
-These rules match the command as the agent writes it. They are not a security boundary: an agent can still
-read the files directly with `cat`. For the GitHub Action, pass the same rules through its `settings` input
-or `claude_args: --allowedTools`.
+For the GitHub Action, pass the same rule through its `settings` input or `claude_args: --allowedTools`.
+Headless, nobody names a topic, so the pre-tool hook asks before every sensitive call, and the call fails.
+
+### Sensitive calls
+
+`AGENTS.md` tells the agent to pass `--allow-sensitive` only for a topic the user named. Two hooks check this
+from outside the agent:
+
+1. `rcllr hook prompt` reads your prompt as you sent it. It compares the words with the names of sensitive
+   topic folders and files and with their `aliases`, ignoring case, umlaut spelling (`ä` or `ae`) and
+   accents. Names and aliases shorter than three characters never match. Each match becomes a grant for
+   this Claude Code session and stays until the session ends. Grants live in `.git/rcllr/grants.json`,
+   never in the working tree.
+2. `rcllr hook pre-tool` reads each Bash command for `--allow-sensitive`, including abbreviations,
+   `=value` and calls inside chains or `$(…)`. When grants cover every requested path and the command
+   runs nothing but rcllr, it allows the call. When a path is not covered, it asks you. A granted call in a
+   chain with other commands gets no answer from the hook, so Claude Code's own rules decide as for any
+   command.
+
+The hook also asks when it cannot read the flag value for sure: a variable, a glob, a substitution, a
+flag inside `bash -c "…"`, `eval` or an unquoted heredoc, or a command it cannot split. A grant covers its
+own path and everything below it, never a broader request such as `--allow-sensitive topics/`.
+
+A `PreToolUse` "allow" does not override an `ask` rule, so the hooks replace the `ask` rules older
+releases wrote. Keep no `ask` rule for `--allow-sensitive`, or Claude Code asks every time.
+
+These checks match the command as the agent writes it. They are not a security boundary: an agent can still
+read the files directly with `cat`, or write the grants file. If the hook cannot run at all, for example
+because `rcllr` is missing from the hook's `PATH`, Claude Code's own rules decide without it.
 
 ## Configuration reference
 
