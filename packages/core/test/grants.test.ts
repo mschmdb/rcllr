@@ -102,7 +102,7 @@ test("grants live in the Git folder and are kept per session", () => {
   addGrants(config, "session-a", ["notes/dating-kapazitaet.md"]);
   assert.deepEqual([...loadGrants(config, "session-a")].sort(), ["notes/dating-kapazitaet.md", "topics/haus-ulm"]);
   assert.deepEqual([...loadGrants(config, "session-b")], []);
-  assert.equal(grantsFile(config), path.join(config.root, ".git", "rcllr", "grants.json"));
+  assert.equal(path.resolve(grantsFile(config) ?? ""), path.resolve(config.root, ".git", "rcllr", "grants.json"));
 });
 
 test("the grants file is private", { skip: NO_FILE_MODES }, () => {
