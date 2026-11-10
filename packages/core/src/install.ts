@@ -33,16 +33,22 @@ fi
 exit 0
 `;
 export const CLAUDE_COMMAND = USER_BIN + ' rcllr --root "$CLAUDE_PROJECT_DIR" hook agent';
+export const CLAUDE_PROMPT_COMMAND = USER_BIN + ' rcllr --root "$CLAUDE_PROJECT_DIR" hook prompt';
+export const CLAUDE_PRE_TOOL_COMMAND = USER_BIN + ' rcllr --root "$CLAUDE_PROJECT_DIR" hook pre-tool';
 export const CODEX_COMMAND = USER_BIN + ' rcllr --root "$(git rev-parse --show-toplevel)" hook agent';
 export const CLAUDE_MATCHER = "Write|Edit|MultiEdit|Bash";
 export const CODEX_MATCHER = "Bash|apply_patch|Edit|Write";
 // Headless agents (`claude -p`, the GitHub Action, cloud sessions) deny every Bash command nobody allowed,
-// and say so only in their result. `ask` beats `allow`, so a sensitive read still prompts in a terminal
-// and is denied headless, where no user named the topic.
-export const PERMISSIONS: Readonly<Record<"allow" | "ask", readonly string[]>> = {
+// and say so only in their result. So rcllr is allowed. Sensitive calls are the pre-tool hook's job: it asks
+// unless a topic the user named in the session covers the call. An `ask` rule would beat the hook's "allow"
+// and ask every time, so install drops the ask rules older releases wrote.
+export const PERMISSIONS: Readonly<Record<"allow", readonly string[]>> = {
   allow: COMMANDS.map((command) => "Bash(" + command + " *)"),
-  ask: COMMANDS.map((command) => "Bash(" + command + " *--allow-sensitive*)"),
 };
+/** The ask rules releases up to 0.5.6 wrote; install removes exactly these. */
+export const LEGACY_ASK: readonly string[] = COMMANDS.map((command) => "Bash(" + command + " *--allow-sensitive*)");
+/** Permission lists install reads or changes, checked before the first write. */
+const PERMISSION_KEYS = ["allow", "ask"] as const;
 
 export type Settings = JsonObject;
 
@@ -88,10 +94,16 @@ export function loadJson(path: string): Settings {
   return data;
 }
 
-/** Any of our agent hooks, including the formats of older releases and the old name dummkopf. */
-export function isOurs(command: unknown): boolean {
+/** Any of our hooks of `kind`, including the formats of older releases and the old name dummkopf. */
+export function isOurs(command: unknown, kind = "agent"): boolean {
   return typeof command === "string" && (command.includes("rcllr") || command.includes("dummkopf"))
-    && command.includes("hook agent");
+    && command.includes("hook " + kind);
+}
+
+/** The hook kind of one of our commands: `... hook agent` gives "agent". */
+function kindOf(command: JsonObject): string {
+  const text = typeof command.command === "string" ? command.command : "";
+  return text.slice(text.lastIndexOf("hook ") + "hook ".length).trim();
 }
 
 /** dict.get on a JSON value; anything but an object fails like Python's AttributeError. */
@@ -129,7 +141,7 @@ export function addHook(settings: Settings, event: string, command: JsonObject, 
   for (const existing of entries) {
     if (isObject(existing) && Array.isArray(existing.hooks) && existing.hooks.length > 0) {
       existing.hooks = existing.hooks.filter((hook) =>
-        get(hook, "command") === command.command || !isOurs(get(hook, "command")));
+        get(hook, "command") === command.command || !isOurs(get(hook, "command"), kindOf(command)));
       if (existing.hooks.length === 0) emptied.push(existing);
     }
   }
@@ -174,7 +186,7 @@ function permissionsOf(settings: Settings, path: string): JsonObject {
   if (!isObject(permissions)) {
     throw new Rejected("settings_invalid", { path: name(path), key: "permissions", expected: "an object" });
   }
-  for (const key of Object.keys(PERMISSIONS)) {
+  for (const key of PERMISSION_KEYS) {
     const rules = permissions[key];
     if (rules !== undefined && !(Array.isArray(rules) && rules.every((rule) => typeof rule === "string"))) {
       throw new Rejected("settings_invalid", { path: name(path), key: "permissions." + key, expected: "a list of strings" });
@@ -183,12 +195,21 @@ function permissionsOf(settings: Settings, path: string): JsonObject {
   return permissions;
 }
 
-/** Add our permission rules once; foreign rules, including a deny on rcllr, stay untouched. */
+/**
+ * Add our permission rules once and drop our old ask rules. Foreign rules, including a deny on rcllr or a
+ * narrower ask rule of the user's own, stay untouched.
+ */
 export function addPermissions(settings: Settings, path: string): void {
   const permissions = permissionsOf(settings, path);
   for (const [key, ours] of Object.entries(PERMISSIONS)) {
     const rules = setdefault(permissions, key, []) as Json[];
     for (const rule of ours) if (!rules.includes(rule)) rules.push(rule);
+  }
+  const ask = permissions.ask;
+  if (Array.isArray(ask)) {
+    const kept = ask.filter((rule) => typeof rule !== "string" || !LEGACY_ASK.includes(rule));
+    if (kept.length > 0) permissions.ask = kept;
+    else delete permissions.ask;
   }
 }
 
@@ -215,6 +236,9 @@ export function installClaude(config: Config, replace: readonly string[] = []): 
   const command: JsonObject = { type: "command", command: CLAUDE_COMMAND };
   addHook(settings, "PostToolUse", command, CLAUDE_MATCHER);
   addHook(settings, "SessionEnd", command, null);
+  // The hooks and the dropped ask rules belong together: without the pre-tool hook nothing would ask.
+  addHook(settings, "UserPromptSubmit", { type: "command", command: CLAUDE_PROMPT_COMMAND }, null);
+  addHook(settings, "PreToolUse", { type: "command", command: CLAUDE_PRE_TOOL_COMMAND }, "Bash");
   addPermissions(settings, path);
   writeJson(path, settings);
   return [path, removed];
