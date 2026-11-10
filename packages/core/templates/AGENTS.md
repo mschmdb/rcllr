@@ -42,6 +42,8 @@ Someone may be looking over the user's shoulder. So:
 - Never quote, summarize, cite or name sensitive content or its folder unless asked explicitly.
 - `--allow-sensitive <topic-or-file>` only after the user named that topic in the current prompt.
   No blanket grants.
+- `--allow-sensitive` takes a topic folder or a `.md` file, never a search term. A hook lets the call through
+  only when the user named that topic in a prompt of this session; otherwise Claude Code asks the user.
 - When in doubt: do not show it, ask briefly.
 
 ## Reading
